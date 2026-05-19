@@ -2,95 +2,39 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from api.models import CustomUser, DoctorProfile, PatientProfile, PatientDoctorMapping
+from api.models import CustomUser, Doctor, Patient, PatientDoctorMapping
 from api.serializers import (
-    DoctorRegisterSerializer,
-    PatientRegisterSerializer,
-    LoginSerializer,
-    DoctorDetailSerializer,
-    PatientDetailSerializer,
-    MappingSerializer,
     UserRegisterSerializer,
+    LoginSerializer,
+    DoctorSerializer,
+    PatientSerializer,
+    MappingSerializer,
 )
-from api.permissions import IsDoctorOrAdmin, IsAdminUser
 
 
-class DoctorRegisterView(APIView):
+class UserRegisterView(APIView):
     """
     POST only.
-    Registers a new doctor user along with their doctor profile.
-    Returns the created user data along with a standard JWT access token string under 'token'.
+    Registers a new system operator CustomUser.
+    Returns standard JWT access token on success.
     """
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        serializer = DoctorRegisterSerializer(data=request.data)
+        serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Return access token on successful registration
+        from rest_framework_simplejwt.tokens import RefreshToken
         token = str(RefreshToken.for_user(user).access_token)
         
         return Response({
             "id": user.id,
             "name": user.name,
             "email": user.email,
-            "role": user.role,
-            "token": token
-        }, status=status.HTTP_201_CREATED)
-
-
-class PatientRegisterView(APIView):
-    """
-    POST only.
-    Registers a new patient user along with their patient profile.
-    Returns the created user data along with a standard JWT access token string under 'token'.
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        serializer = PatientRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        
-        # Return access token on successful registration
-        token = str(RefreshToken.for_user(user).access_token)
-        
-        return Response({
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,
-            "token": token
-        }, status=status.HTTP_201_CREATED)
-
-
-class GenericRegisterView(APIView):
-    """
-    POST only.
-    Registers a new user (patient, doctor, or admin).
-    Returns the created user data along with a standard JWT access token under 'token'.
-    Sets created_by parameter dynamically.
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        serializer = UserRegisterSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        
-        # Return access token on successful registration
-        token = str(RefreshToken.for_user(user).access_token)
-        
-        return Response({
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,
+            "role": "admin",
             "token": token
         }, status=status.HTTP_201_CREATED)
 
@@ -98,8 +42,8 @@ class GenericRegisterView(APIView):
 class LoginView(APIView):
     """
     POST only.
-    Authenticates email + password.
-    Returns JWT access/refresh tokens alongside role, user_id, and name.
+    Logs in the system operator using email & password.
+    Returns JWT access and refresh tokens.
     """
     permission_classes = [AllowAny]
 
@@ -109,230 +53,144 @@ class LoginView(APIView):
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
-class PatientListCreateView(APIView):
-    """
-    GET + POST. Requires IsAuthenticated.
-    - POST: Permission: IsDoctorOrAdmin. Creates patient user + profile, sets created_by, returns full patient data.
-    - GET: Permission: IsAuthenticated. Retrieve all patients created by the authenticated user (or all patients if Admin).
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        if request.user.role not in ['doctor', 'admin']:
-            raise PermissionDenied("You do not have permission")
-            
-        serializer = PatientRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Save user and explicitly set created_by to the active authenticated user
-        user = serializer.save()
-        user.created_by = request.user
-        user.save()
-        
-        detail_serializer = PatientDetailSerializer(user)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
-
-    def get(self, request, *args, **kwargs):
-        if request.user.role == 'admin':
-            patients = CustomUser.objects.filter(role='patient')
-        else:
-            # Strictly return all patient accounts created by this specific authenticated user
-            patients = CustomUser.objects.filter(role='patient', created_by=request.user)
-        
-        serializer = PatientDetailSerializer(patients, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class PatientDetailView(APIView):
-    """
-    GET + PUT + DELETE. Requires IsAuthenticated.
-    - GET: Permission: IsDoctor (only if assigned) | IsAdmin | IsOwner (patient themselves).
-    - PUT: Permission: IsDoctorOrAdmin. Updates patient profile, returns updated data.
-    - DELETE: Permission: IsAdminUser only. Deletes user and returns 204.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        return get_object_or_404(CustomUser, id=pk, role='patient')
-
-    def get(self, request, pk, *args, **kwargs):
-        patient = self.get_object(pk)
-        
-        # Check specific permission: Admin, Assigned Doctor, or Patient themselves
-        if request.user.role == 'admin':
-            pass
-        elif request.user.role == 'patient' and request.user.id == patient.id:
-            pass
-        elif request.user.role == 'doctor':
-            if not PatientDoctorMapping.objects.filter(doctor=request.user, patient=patient).exists():
-                raise PermissionDenied("You do not have permission")
-        else:
-            raise PermissionDenied("You do not have permission")
-
-        serializer = PatientDetailSerializer(patient)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def put(self, request, pk, *args, **kwargs):
-        if request.user.role not in ['doctor', 'admin']:
-            raise PermissionDenied("You do not have permission")
-
-        patient = self.get_object(pk)
-        serializer = PatientDetailSerializer(patient, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def delete(self, request, pk, *args, **kwargs):
-        if request.user.role != 'admin':
-            raise PermissionDenied("You do not have permission")
-
-        patient = self.get_object(pk)
-        patient.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 class DoctorListCreateView(APIView):
     """
-    GET + POST. Requires IsAuthenticated.
-    - POST: Permission: IsAdminUser. Creates doctor user + profile.
-    - GET: Permission: IsAuthenticated (all roles can view doctor list).
+    GET: List all doctors.
+    POST: Register a new standalone doctor entry.
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
-        if request.user.role != 'admin':
-            raise PermissionDenied("You do not have permission")
-        
-        serializer = DoctorRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        detail_serializer = DoctorDetailSerializer(user)
-        return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
-
     def get(self, request, *args, **kwargs):
-        doctors = CustomUser.objects.filter(role='doctor')
-        serializer = DoctorDetailSerializer(doctors, many=True)
+        doctors = Doctor.objects.all()
+        serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        serializer = DoctorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class DoctorDetailView(APIView):
     """
-    GET + PUT + DELETE. Requires IsAuthenticated.
-    - GET: Permission: IsAuthenticated (all roles can view doctor details).
-    - PUT: Permission: IsAdminUser | IsOwner (doctor themselves).
-    - DELETE: Permission: IsAdminUser only. Deletes user and returns 204.
+    GET: Retrieve doctor details.
+    PUT: Update doctor record.
+    DELETE: Remove doctor record.
     """
     permission_classes = [IsAuthenticated]
 
-    def get_object(self, pk):
-        return get_object_or_404(CustomUser, id=pk, role='doctor')
-
     def get(self, request, pk, *args, **kwargs):
-        doctor = self.get_object(pk)
-        serializer = DoctorDetailSerializer(doctor)
+        doctor = get_object_or_404(Doctor, pk=pk)
+        serializer = DoctorSerializer(doctor)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk, *args, **kwargs):
-        doctor = self.get_object(pk)
-        
-        # Check permissions: Admin or Owner (doctor themselves)
-        if request.user.role == 'admin':
-            pass
-        elif request.user.role == 'doctor' and request.user.id == doctor.id:
-            pass
-        else:
-            raise PermissionDenied("You do not have permission")
-
-        serializer = DoctorDetailSerializer(doctor, data=request.data, partial=True)
+        doctor = get_object_or_404(Doctor, pk=pk)
+        serializer = DoctorSerializer(doctor, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk, *args, **kwargs):
-        if request.user.role != 'admin':
-            raise PermissionDenied("You do not have permission")
-
-        doctor = self.get_object(pk)
+        doctor = get_object_or_404(Doctor, pk=pk)
         doctor.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PatientListCreateView(APIView):
+    """
+    GET: List patients created by the authenticated operator.
+    POST: Create a new standalone patient record linked to the operator.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        patients = Patient.objects.filter(created_by=request.user)
+        serializer = PatientSerializer(patients, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        serializer = PatientSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PatientDetailView(APIView):
+    """
+    GET: Retrieve patient details (must be created by request.user).
+    PUT: Update patient details.
+    DELETE: Delete patient record.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+        patient = get_object_or_404(Patient, pk=pk, created_by=request.user)
+        serializer = PatientSerializer(patient)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, *args, **kwargs):
+        patient = get_object_or_404(Patient, pk=pk, created_by=request.user)
+        serializer = PatientSerializer(patient, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk, *args, **kwargs):
+        patient = get_object_or_404(Patient, pk=pk, created_by=request.user)
+        patient.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MappingListCreateView(APIView):
     """
-    GET + POST. Requires IsAuthenticated.
-    - POST: Permission: IsDoctorOrAdmin. Assigns doctor to patient.
-    - GET: Permission: IsDoctor (returns only their own mappings) or IsAdmin (returns all mappings).
+    GET: List doctor-patient assignments created by the authenticated operator.
+    POST: Assign a doctor to a patient owned by the operator.
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
-        if request.user.role not in ['doctor', 'admin']:
-            raise PermissionDenied("You do not have permission")
-        
-        serializer = MappingSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
     def get(self, request, *args, **kwargs):
-        if request.user.role == 'admin':
-            mappings = PatientDoctorMapping.objects.all()
-        elif request.user.role == 'doctor':
-            mappings = PatientDoctorMapping.objects.filter(doctor=request.user)
-        else:
-            raise PermissionDenied("You do not have permission")
-
+        mappings = PatientDoctorMapping.objects.filter(patient__created_by=request.user)
         serializer = MappingSerializer(mappings, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        serializer = MappingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        patient = serializer.validated_data['patient']
+        if patient.created_by != request.user:
+            return Response(
+                {"error": "You do not have permission to assign doctors to this patient."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class MappingPatientDetailView(APIView):
     """
-    GET by patient_id. Requires IsAuthenticated.
-    - GET: Permission: IsDoctor (if assigned to that patient) | IsAdmin | IsOwner (patient themselves).
-    Returns all doctors assigned to that specific patient as a list of Doctor objects.
+    GET: Retrieve list of Doctors assigned to a specific patient.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, patient_id, *args, **kwargs):
-        patient_user = get_object_or_404(CustomUser, id=patient_id, role='patient')
-        
-        # Check permissions: Admin, Patient themselves, or Assigned Doctor
-        if request.user.role == 'admin':
-            pass
-        elif request.user.role == 'patient' and request.user.id == patient_user.id:
-            pass
-        elif request.user.role == 'doctor':
-            if not PatientDoctorMapping.objects.filter(doctor=request.user, patient=patient_user).exists():
-                raise PermissionDenied("You do not have permission")
-        else:
-            raise PermissionDenied("You do not have permission")
-
-        # Get all doctor user records assigned to this patient
-        mappings = PatientDoctorMapping.objects.filter(patient=patient_user)
+        patient = get_object_or_404(Patient, pk=patient_id, created_by=request.user)
+        mappings = PatientDoctorMapping.objects.filter(patient=patient)
         doctors = [m.doctor for m in mappings]
-        
-        serializer = DoctorDetailSerializer(doctors, many=True)
+        serializer = DoctorSerializer(doctors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class MappingDeleteView(APIView):
     """
-    DELETE by mapping id. Requires IsAuthenticated.
-    - DELETE: Permission: IsDoctorOrAdmin. Deletes the specific patient-doctor mapping.
+    DELETE: Dismiss a specific doctor-patient care relationship.
     """
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, pk, *args, **kwargs):
-        mapping = get_object_or_404(PatientDoctorMapping, id=pk)
-        
-        # Check permissions: Admin, or the Doctor associated with this mapping
-        if request.user.role == 'admin':
-            pass
-        elif request.user.role == 'doctor' and mapping.doctor.id == request.user.id:
-            pass
-        else:
-            raise PermissionDenied("You do not have permission")
-
+        mapping = get_object_or_404(PatientDoctorMapping, pk=pk, patient__created_by=request.user)
         mapping.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
