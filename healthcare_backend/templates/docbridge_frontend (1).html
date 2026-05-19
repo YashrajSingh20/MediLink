@@ -1,0 +1,656 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocBridge - Healthcare Management</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--color-background-tertiary); color: var(--color-text-primary); line-height: 1.6; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+
+header { background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-tertiary); padding: 1.5rem 0; margin-bottom: 2rem; }
+header h1 { font-size: 24px; font-weight: 500; }
+
+.auth-container { display: none; }
+.auth-container.active { display: block; }
+.dashboard { display: none; }
+.dashboard.active { display: block; }
+
+.auth-section { max-width: 400px; margin: 0 auto; }
+.auth-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; }
+.auth-card h2 { font-size: 18px; margin-bottom: 1.5rem; }
+
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 13px; color: var(--color-text-secondary); margin-bottom: 0.5rem; font-weight: 500; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; font-size: 14px; border: 0.5px solid var(--color-border-tertiary); border-radius: 6px; background: var(--color-background-primary); color: var(--color-text-primary); }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--color-border-secondary); background: var(--color-background-secondary); }
+
+.btn { padding: 10px 16px; font-size: 14px; font-weight: 500; border: 0.5px solid var(--color-border-secondary); border-radius: 6px; background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; transition: all 0.2s; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn.primary { background: #185FA5; color: white; border-color: #185FA5; }
+.btn.primary:hover { background: #0C447C; }
+.btn-group { display: flex; gap: 8px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.tab { padding: 12px 16px; font-size: 14px; font-weight: 500; border: none; background: none; color: var(--color-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.tab.active { color: var(--color-text-primary); border-bottom-color: #185FA5; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 2rem; }
+
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 12px; padding: 1.5rem; }
+.card h3 { font-size: 16px; margin-bottom: 0.5rem; }
+.card p { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 1rem; }
+.card-actions { display: flex; gap: 8px; margin-top: 1rem; }
+
+.alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 1rem; font-size: 14px; }
+.alert.success { background: #EAF3DE; color: #27500A; border: 0.5px solid #97C459; }
+.alert.error { background: #FCEBEB; color: #791F1F; border: 0.5px solid #F09595; }
+.alert.info { background: #E6F1FB; color: #0C447C; border: 0.5px solid #85B7EB; }
+
+.menu { display: flex; gap: 16px; margin-bottom: 2rem; }
+.menu button { padding: 10px 16px; border: 0.5px solid var(--color-border-tertiary); border-radius: 6px; background: var(--color-background-primary); cursor: pointer; transition: all 0.2s; }
+.menu button.active { background: #185FA5; color: white; border-color: #185FA5; }
+
+.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+.modal.active { display: flex; }
+.modal-content { background: var(--color-background-primary); border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; }
+.modal-close { float: right; font-size: 24px; cursor: pointer; color: var(--color-text-secondary); }
+
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.status-badge.active { background: #EAF3DE; color: #27500A; }
+.status-badge.inactive { background: #FCEBEB; color: #791F1F; }
+
+.patient-list, .doctor-list { margin-top: 1rem; }
+.list-item { padding: 1rem; background: var(--color-background-secondary); border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+.list-item-info h4 { font-size: 14px; margin-bottom: 0.25rem; }
+.list-item-info p { font-size: 12px; color: var(--color-text-secondary); margin: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>🏥 DocBridge Healthcare Management</h1>
+  </div>
+</header>
+
+<div class="container">
+  <div id="authContainer" class="auth-container active">
+    <div class="auth-section">
+      <div class="tabs">
+        <button class="tab active" onclick="switchAuthTab('login')">Login</button>
+        <button class="tab" onclick="switchAuthTab('register')">Register</button>
+      </div>
+
+      <div id="loginTab" class="auth-tab active">
+        <div class="auth-card">
+          <h2>Login to your account</h2>
+          <div id="loginAlert"></div>
+          <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="loginEmail" placeholder="doctor@medilink.com" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="loginPassword" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn primary" style="width: 100%;">Sign In</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="registerTab" class="auth-tab" style="display: none;">
+        <div class="tabs" style="margin-bottom: 1rem; border: none;">
+          <button class="tab active" onclick="switchUserType('doctor')" style="border-bottom: 2px solid #1D9E75;">Doctor</button>
+          <button class="tab" onclick="switchUserType('patient')" style="border-bottom: 2px solid transparent;">Patient</button>
+        </div>
+
+        <div id="doctorRegister" class="auth-card" style="display: block;">
+          <h2>Register as Doctor</h2>
+          <form onsubmit="handleDoctorRegister(event)">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" id="docName" placeholder="Dr. John Smith" required>
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="docEmail" placeholder="john@hospital.com" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="docPassword" placeholder="••••••••" required>
+            </div>
+            <div class="form-group">
+              <label>Specialization</label>
+              <input type="text" id="docSpec" placeholder="Cardiology" required>
+            </div>
+            <div class="form-group">
+              <label>Experience (years)</label>
+              <input type="number" id="docExp" placeholder="10" required>
+            </div>
+            <div class="form-group">
+              <label>License Number</label>
+              <input type="text" id="docLicense" placeholder="LIC123456" required>
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" id="docPhone" placeholder="+1 (555) 0123" required>
+            </div>
+            <button type="submit" class="btn primary" style="width: 100%;">Register</button>
+          </form>
+        </div>
+
+        <div id="patientRegister" class="auth-card" style="display: none;">
+          <h2>Register as Patient</h2>
+          <form onsubmit="handlePatientRegister(event)">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" id="patName" placeholder="Jane Doe" required>
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="patEmail" placeholder="jane@example.com" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="patPassword" placeholder="••••••••" required>
+            </div>
+            <div class="form-group">
+              <label>Date of Birth</label>
+              <input type="date" id="patDOB" required>
+            </div>
+            <div class="form-group">
+              <label>Blood Group</label>
+              <select id="patBlood" required>
+                <option>Select...</option>
+                <option>O+</option>
+                <option>O-</option>
+                <option>A+</option>
+                <option>A-</option>
+                <option>B+</option>
+                <option>B-</option>
+                <option>AB+</option>
+                <option>AB-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" id="patPhone" placeholder="+1 (555) 0123" required>
+            </div>
+            <div class="form-group">
+              <label>Address</label>
+              <textarea id="patAddress" placeholder="123 Main St, City, State" required></textarea>
+            </div>
+            <button type="submit" class="btn primary" style="width: 100%;">Register</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard" class="dashboard">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+      <div>
+        <h2 id="dashTitle" style="font-size: 22px; margin-bottom: 0.5rem;">Welcome, <span id="userName"></span></h2>
+        <p style="color: var(--color-text-secondary);" id="userRole"></p>
+      </div>
+      <button class="btn" onclick="handleLogout()">Logout</button>
+    </div>
+
+    <div id="doctorDashboard" style="display: none;">
+      <div class="menu">
+        <button class="active" onclick="switchDashTab('patients', this)">My Patients</button>
+        <button onclick="switchDashTab('doctors', this)">All Doctors</button>
+        <button onclick="switchDashTab('mappings', this)">Mappings</button>
+      </div>
+
+      <div id="patientsTab" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h3 style="font-size: 18px;">My Patients</h3>
+          <button class="btn primary" onclick="openAddPatientModal()">+ Add Patient</button>
+        </div>
+        <div id="patientsList" class="patient-list"></div>
+      </div>
+
+      <div id="doctorsTab" class="tab-content" style="display: none;">
+        <h3 style="font-size: 18px; margin-bottom: 1.5rem;">Available Doctors</h3>
+        <div id="doctorsList" class="doctor-list"></div>
+      </div>
+
+      <div id="mappingsTab" class="tab-content" style="display: none;">
+        <h3 style="font-size: 18px; margin-bottom: 1.5rem;">Patient-Doctor Mappings</h3>
+        <div id="mappingsList"></div>
+      </div>
+    </div>
+
+    <div id="patientDashboard" style="display: none;">
+      <div class="menu">
+        <button class="active" onclick="switchDashTab('profile', this)">My Profile</button>
+        <button onclick="switchDashTab('myDoctors', this)">My Doctors</button>
+      </div>
+
+      <div id="profileTab" class="tab-content">
+        <div class="card">
+          <h3>Your Medical Profile</h3>
+          <div style="margin-top: 1rem;">
+            <p><strong>Name:</strong> <span id="patProfileName"></span></p>
+            <p><strong>Email:</strong> <span id="patProfileEmail"></span></p>
+            <p><strong>Blood Group:</strong> <span id="patProfileBlood"></span></p>
+            <p><strong>Date of Birth:</strong> <span id="patProfileDOB"></span></p>
+            <p><strong>Phone:</strong> <span id="patProfilePhone"></span></p>
+            <p><strong>Address:</strong> <span id="patProfileAddress"></span></p>
+          </div>
+        </div>
+      </div>
+
+      <div id="myDoctorsTab" class="tab-content" style="display: none;">
+        <h3 style="font-size: 18px; margin-bottom: 1.5rem;">Your Assigned Doctors</h3>
+        <div id="myDoctorsList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="addPatientModal" class="modal">
+  <div class="modal-content">
+    <span class="modal-close" onclick="closeAddPatientModal()">&times;</span>
+    <h2 style="margin-bottom: 1.5rem;">Add New Patient</h2>
+    <form onsubmit="handleAddPatient(event)">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="newPatName" required>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="newPatEmail" required>
+      </div>
+      <div class="form-group">
+        <label>Date of Birth</label>
+        <input type="date" id="newPatDOB" required>
+      </div>
+      <div class="form-group">
+        <label>Blood Group</label>
+        <select id="newPatBlood" required>
+          <option>Select...</option>
+          <option>O+</option>
+          <option>O-</option>
+          <option>A+</option>
+          <option>A-</option>
+          <option>B+</option>
+          <option>B-</option>
+          <option>AB+</option>
+          <option>AB-</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="tel" id="newPatPhone" required>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <textarea id="newPatAddress" required></textarea>
+      </div>
+      <button type="submit" class="btn primary" style="width: 100%;">Add Patient</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const API_URL = 'http://localhost:8000/api';
+let authToken = localStorage.getItem('authToken');
+let userRole = localStorage.getItem('userRole');
+let userId = localStorage.getItem('userId');
+let userName = localStorage.getItem('userName');
+
+if (authToken && userRole) {
+  showDashboard();
+} else {
+  showAuth();
+}
+
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tab === 'login' ? 'loginTab' : 'registerTab').style.display = 'block';
+  event.target.classList.add('active');
+}
+
+function switchUserType(type) {
+  document.getElementById('doctorRegister').style.display = type === 'doctor' ? 'block' : 'none';
+  document.getElementById('patientRegister').style.display = type === 'patient' ? 'block' : 'none';
+  document.querySelectorAll('.tabs .tab').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function switchDashTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.menu button').forEach(el => el.classList.remove('active'));
+  document.getElementById(tab + 'Tab').style.display = 'block';
+  btn.classList.add('active');
+  
+  if (tab === 'patients') loadPatients();
+  if (tab === 'doctors') loadDoctors();
+  if (tab === 'mappings') loadMappings();
+  if (tab === 'myDoctors') loadMyDoctors();
+  if (tab === 'profile') loadMyProfile();
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  
+  try {
+    const res = await fetch(`${API_URL}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      authToken = data.access;
+      userRole = data.role;
+      userId = data.user_id;
+      userName = data.name;
+      localStorage.setItem('authToken', authToken);
+      localStorage.setItem('userRole', userRole);
+      localStorage.setItem('userId', userId);
+      localStorage.setItem('userName', userName);
+      showDashboard();
+    } else {
+      showAlert('loginAlert', 'Invalid credentials', 'error');
+    }
+  } catch (err) {
+    showAlert('loginAlert', 'Error connecting to server', 'error');
+  }
+}
+
+async function handleDoctorRegister(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('docName').value,
+    email: document.getElementById('docEmail').value,
+    password: document.getElementById('docPassword').value,
+    specialization: document.getElementById('docSpec').value,
+    experience_years: parseInt(document.getElementById('docExp').value),
+    license_number: document.getElementById('docLicense').value,
+    phone: document.getElementById('docPhone').value
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/auth/register/doctor/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    if (res.ok) {
+      alert('Doctor registered! Please login.');
+      switchAuthTab('login');
+    } else {
+      const err = await res.json();
+      alert('Registration failed: ' + JSON.stringify(err));
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function handlePatientRegister(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('patName').value,
+    email: document.getElementById('patEmail').value,
+    password: document.getElementById('patPassword').value,
+    date_of_birth: document.getElementById('patDOB').value,
+    blood_group: document.getElementById('patBlood').value,
+    phone: document.getElementById('patPhone').value,
+    address: document.getElementById('patAddress').value
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/auth/register/patient/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    if (res.ok) {
+      alert('Patient registered! Please login.');
+      switchAuthTab('login');
+    } else {
+      const err = await res.json();
+      alert('Registration failed: ' + JSON.stringify(err));
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function loadPatients() {
+  try {
+    const res = await fetch(`${API_URL}/patients/`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      const list = document.getElementById('patientsList');
+      list.innerHTML = data.results.map(p => `
+        <div class="list-item">
+          <div class="list-item-info">
+            <h4>${p.name}</h4>
+            <p>${p.email}</p>
+            <p>Age: ${p.patient_profile?.date_of_birth ? new Date().getFullYear() - new Date(p.patient_profile.date_of_birth).getFullYear() : 'N/A'}</p>
+          </div>
+          <div class="btn-group">
+            <button class="btn" onclick="viewPatient(${p.id})">View</button>
+            <button class="btn" onclick="editPatient(${p.id})">Edit</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadDoctors() {
+  try {
+    const res = await fetch(`${API_URL}/doctors/`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      const list = document.getElementById('doctorsList');
+      list.innerHTML = data.results.map(d => `
+        <div class="list-item">
+          <div class="list-item-info">
+            <h4>Dr. ${d.name}</h4>
+            <p>${d.doctor_profile?.specialization || 'N/A'}</p>
+            <p>Exp: ${d.doctor_profile?.experience_years || 'N/A'} years</p>
+          </div>
+          <button class="btn" onclick="assignDoctor(${d.id})">Assign</button>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadMappings() {
+  try {
+    const res = await fetch(`${API_URL}/mappings/`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      const list = document.getElementById('mappingsList');
+      list.innerHTML = data.results.map(m => `
+        <div class="list-item">
+          <div class="list-item-info">
+            <h4>${m.patient.name} → Dr. ${m.doctor.name}</h4>
+            <p>${m.doctor.doctor_profile?.specialization || 'N/A'}</p>
+          </div>
+          <button class="btn" onclick="deleteMapping(${m.id})">Remove</button>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadMyDoctors() {
+  try {
+    const res = await fetch(`${API_URL}/mappings/${userId}/`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      const list = document.getElementById('myDoctorsList');
+      list.innerHTML = data.map(d => `
+        <div class="list-item">
+          <div class="list-item-info">
+            <h4>Dr. ${d.doctor.name}</h4>
+            <p>${d.doctor.doctor_profile?.specialization || 'N/A'}</p>
+            <p>Lic: ${d.doctor.doctor_profile?.license_number || 'N/A'}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadMyProfile() {
+  try {
+    const res = await fetch(`${API_URL}/patients/${userId}/`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('patProfileName').textContent = data.name;
+      document.getElementById('patProfileEmail').textContent = data.email;
+      document.getElementById('patProfileBlood').textContent = data.patient_profile?.blood_group || 'N/A';
+      document.getElementById('patProfileDOB').textContent = data.patient_profile?.date_of_birth || 'N/A';
+      document.getElementById('patProfilePhone').textContent = data.patient_profile?.phone || 'N/A';
+      document.getElementById('patProfileAddress').textContent = data.patient_profile?.address || 'N/A';
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function openAddPatientModal() {
+  document.getElementById('addPatientModal').classList.add('active');
+}
+
+function closeAddPatientModal() {
+  document.getElementById('addPatientModal').classList.remove('active');
+}
+
+async function handleAddPatient(e) {
+  e.preventDefault();
+  const data = {
+    name: document.getElementById('newPatName').value,
+    email: document.getElementById('newPatEmail').value,
+    date_of_birth: document.getElementById('newPatDOB').value,
+    blood_group: document.getElementById('newPatBlood').value,
+    phone: document.getElementById('newPatPhone').value,
+    address: document.getElementById('newPatAddress').value
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/patients/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (res.ok) {
+      closeAddPatientModal();
+      loadPatients();
+      alert('Patient added successfully!');
+    } else {
+      alert('Error adding patient');
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+function assignDoctor(doctorId) {
+  alert('Assign doctor ' + doctorId + ' - Implement via API');
+}
+
+function deleteMapping(mappingId) {
+  if (confirm('Remove this mapping?')) {
+    fetch(`${API_URL}/mappings/${mappingId}/`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    }).then(() => loadMappings());
+  }
+}
+
+function viewPatient(patientId) {
+  alert('View patient ' + patientId);
+}
+
+function editPatient(patientId) {
+  alert('Edit patient ' + patientId);
+}
+
+function showAlert(containerId, message, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = `<div class="alert ${type}">${message}</div>`;
+}
+
+function showAuth() {
+  document.getElementById('authContainer').classList.add('active');
+  document.getElementById('dashboard').classList.remove('active');
+}
+
+function showDashboard() {
+  document.getElementById('authContainer').classList.remove('active');
+  document.getElementById('dashboard').classList.add('active');
+  document.getElementById('userName').textContent = userName;
+  document.getElementById('userRole').textContent = userRole === 'doctor' ? '👨‍⚕️ Doctor' : '👤 Patient';
+  
+  if (userRole === 'doctor') {
+    document.getElementById('doctorDashboard').style.display = 'block';
+    document.getElementById('patientDashboard').style.display = 'none';
+    loadPatients();
+  } else {
+    document.getElementById('doctorDashboard').style.display = 'none';
+    document.getElementById('patientDashboard').style.display = 'block';
+    loadMyProfile();
+  }
+}
+
+function handleLogout() {
+  authToken = null;
+  userRole = null;
+  userId = null;
+  userName = null;
+  localStorage.clear();
+  showAuth();
+}
+</script>
+
+</body>
+</html>
