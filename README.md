@@ -1,6 +1,12 @@
 # Healthcare Backend REST API
 
-A production-ready Django REST Framework (DRF) backend for a healthcare application. It includes user registration and profile management for Doctors and Patients, secure token-based JWT authentication, custom roles ('doctor', 'patient', 'admin'), a flexible Patient-Doctor assignment model, and customized exception handlers mapping every single response to robust, structured JSON.
+A production-ready Django REST Framework (DRF) backend for a healthcare application. In this architecture:
+- **CustomUser** represents the authenticated system operator (e.g. receptionist, staff, or admin). Users register and login via JWT tokens to manage the clinical workspace.
+- **Doctor** is a standalone data table containing specialization, experience, phone, and license details.
+- **Patient** is a standalone data table tracked back to the authenticated system operator (`created_by`) who added their record.
+- **PatientDoctorMapping** maps assignments between Patients and Doctors.
+
+The API features built-in serialization layers wrapping/unwrapping payloads for full compatibility with nested profiles on the premium glassmorphic SPA frontend client.
 
 ---
 
@@ -58,7 +64,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 ### Step 5: Run Database Migrations
 Generate and run migrations to create the database schemas:
 ```bash
-python manage.py makemigrations api
+python manage.py makemigrations
 python manage.py migrate
 ```
 
@@ -76,7 +82,7 @@ The server will start running at `http://127.0.0.1:8000/`.
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | `SECRET_KEY` | Unique Django secret key used for signing cryptographic tokens and JWT signatures. | `your-secret-key` |
-| `DEBUG` | Enable/disable developer mode showing detailed debug traces. Set to `False` in prod. | `True` |
+| `DEBUG` | Enable/disable developer mode showing detailed debug traces. | `True` |
 | `DB_NAME` | Name of the PostgreSQL database designed for this app. | `healthcare_db` |
 | `DB_USER` | Username used to authenticate against the PostgreSQL server. | `postgres` |
 | `DB_PASSWORD` | Password used to authenticate against the PostgreSQL server. | `yourpassword` |
@@ -86,73 +92,27 @@ The server will start running at `http://127.0.0.1:8000/`.
 
 ---
 
-## 3. Database Seeding (`seed_data`)
-
-We have written an idempotent seeding command to let you populate the database with a standard set of users and assignments.
-To run the seed script:
-```bash
-python manage.py seed_data
-```
-
-This script will automatically clear any conflicting mock records and create:
-1. **1 Admin User**: `admin@healthcare.com` (password: `AdminPassword123`)
-2. **2 Doctors**:
-   - `doctor1@healthcare.com` (password: `DoctorPassword123`, Spec: Cardiology)
-   - `doctor2@healthcare.com` (password: `DoctorPassword123`, Spec: Pediatrics)
-3. **3 Patients**:
-   - `patient1@healthcare.com` (password: `PatientPassword123`)
-   - `patient2@healthcare.com` (password: `PatientPassword123`)
-   - `patient3@healthcare.com` (password: `PatientPassword123`)
-4. **3 Assignments**:
-   - Assigned `John Doe` -> `Dr. Alice Smith`
-   - Assigned `Jane Miller` -> `Dr. Bob Jones`
-   - Assigned `Charlie Brown` -> `Dr. Alice Smith`
-
----
-
-## 4. API Endpoints Reference & Examples
+## 3. API Endpoints Reference & Examples
 
 Use the following cURL examples to interact with the server. (Remember to replace `<JWT_ACCESS_TOKEN>` with your login JWT access token).
 
 ### Authentication
 
-#### A. Register Doctor
-* **Route**: `POST /api/auth/register/doctor/`
+#### A. Register System Operator
+* **Route**: `POST /api/auth/register/`
 * **Access**: Public
 * **cURL Request**:
 ```bash
-curl -X POST http://127.0.0.1:8000/api/auth/register/doctor/ \
+curl -X POST http://127.0.0.1:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Dr. Sarah Connor",
-    "email": "sarah.connor@healthcare.com",
-    "password": "SecurePassword123",
-    "specialization": "Neurology",
-    "experience_years": 15,
-    "phone": "555-9090",
-    "license_number": "LIC90909"
+    "name": "Jane Doe",
+    "email": "operator@healthcare.com",
+    "password": "SecurePassword123"
   }'
 ```
 
-#### B. Register Patient
-* **Route**: `POST /api/auth/register/patient/`
-* **Access**: Public
-* **cURL Request**:
-```bash
-curl -X POST http://127.0.0.1:8000/api/auth/register/patient/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Bruce Wayne",
-    "email": "bruce.wayne@waynecorp.com",
-    "password": "BatmanPassword123",
-    "date_of_birth": "1980-04-17",
-    "blood_group": "AB+",
-    "phone": "555-8888",
-    "address": "Wayne Manor, Gotham City"
-  }'
-```
-
-#### C. Login User
+#### B. Login System Operator
 * **Route**: `POST /api/auth/login/`
 * **Access**: Public
 * **cURL Request**:
@@ -160,12 +120,12 @@ curl -X POST http://127.0.0.1:8000/api/auth/register/patient/ \
 curl -X POST http://127.0.0.1:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "doctor1@healthcare.com",
-    "password": "DoctorPassword123"
+    "email": "operator@healthcare.com",
+    "password": "SecurePassword123"
   }'
 ```
 
-#### D. Refresh JWT Token
+#### C. Refresh JWT Token
 * **Route**: `POST /api/auth/token/refresh/`
 * **Access**: Public
 * **cURL Request**:
@@ -181,9 +141,9 @@ curl -X POST http://127.0.0.1:8000/api/auth/token/refresh/ \
 
 ### Patient Management
 
-#### A. Create Patient Profile
+#### A. Create Standalone Patient
 * **Route**: `POST /api/patients/`
-* **Access**: Authenticated Doctors or Admins
+* **Access**: Authenticated System Operator (automatically links `created_by` field)
 * **cURL Request**:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/patients/ \
@@ -192,7 +152,6 @@ curl -X POST http://127.0.0.1:8000/api/patients/ \
   -d '{
     "name": "Peter Parker",
     "email": "spidey@dailybugle.net",
-    "password": "SpideyPassword123",
     "date_of_birth": "2001-08-10",
     "blood_group": "O-",
     "phone": "555-0909",
@@ -203,7 +162,7 @@ curl -X POST http://127.0.0.1:8000/api/patients/ \
 
 #### B. List Patients
 * **Route**: `GET /api/patients/`
-* **Access**: Authenticated Doctors (returns only assigned patients) or Admins (returns all patients)
+* **Access**: Authenticated System Operator (returns patients created by the authenticated operator)
 * **cURL Request**:
 ```bash
 curl -X GET http://127.0.0.1:8000/api/patients/ \
@@ -212,25 +171,26 @@ curl -X GET http://127.0.0.1:8000/api/patients/ \
 
 #### C. Get Patient Details
 * **Route**: `GET /api/patients/<id>/`
-* **Access**: Admin | Assigned Doctor | The Patient themselves
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X GET http://127.0.0.1:8000/api/patients/4/ \
+curl -X GET http://127.0.0.1:8000/api/patients/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
-#### D. Update Patient Profile
+#### D. Update Patient Details
 * **Route**: `PUT /api/patients/<id>/`
-* **Access**: Doctor or Admin
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X PUT http://127.0.0.1:8000/api/patients/4/ \
+curl -X PUT http://127.0.0.1:8000/api/patients/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Peter Parker Updated",
     "patient_profile": {
       "phone": "555-9999",
+      "address": "New Mansion, Gotham",
       "medical_history": "Recovered from flu. Spider bite checked."
     }
   }'
@@ -238,10 +198,10 @@ curl -X PUT http://127.0.0.1:8000/api/patients/4/ \
 
 #### E. Delete Patient
 * **Route**: `DELETE /api/patients/<id>/`
-* **Access**: Admins Only
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X DELETE http://127.0.0.1:8000/api/patients/4/ \
+curl -X DELETE http://127.0.0.1:8000/api/patients/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
@@ -249,9 +209,9 @@ curl -X DELETE http://127.0.0.1:8000/api/patients/4/ \
 
 ### Doctor Management
 
-#### A. Create Doctor Profile
+#### A. Create Standalone Doctor
 * **Route**: `POST /api/doctors/`
-* **Access**: Admins Only
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/doctors/ \
@@ -260,7 +220,6 @@ curl -X POST http://127.0.0.1:8000/api/doctors/ \
   -d '{
     "name": "Dr. Strange",
     "email": "strange@kamartaj.org",
-    "password": "PortalPassword123",
     "specialization": "Neurosurgery",
     "experience_years": 20,
     "phone": "555-8899",
@@ -270,7 +229,7 @@ curl -X POST http://127.0.0.1:8000/api/doctors/ \
 
 #### B. List Doctors
 * **Route**: `GET /api/doctors/`
-* **Access**: Authenticated (All Roles)
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
 curl -X GET http://127.0.0.1:8000/api/doctors/ \
@@ -279,36 +238,38 @@ curl -X GET http://127.0.0.1:8000/api/doctors/ \
 
 #### C. Get Doctor Details
 * **Route**: `GET /api/doctors/<id>/`
-* **Access**: Authenticated (All Roles)
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X GET http://127.0.0.1:8000/api/doctors/2/ \
+curl -X GET http://127.0.0.1:8000/api/doctors/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
-#### D. Update Doctor Profile
+#### D. Update Doctor Details
 * **Route**: `PUT /api/doctors/<id>/`
-* **Access**: Admin | The Doctor themselves
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X PUT http://127.0.0.1:8000/api/doctors/2/ \
+curl -X PUT http://127.0.0.1:8000/api/doctors/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Dr. Alice Smith Jr.",
+    "name": "Dr. Strange Jr.",
     "doctor_profile": {
-      "experience_years": 13,
-      "phone": "555-1212"
+      "specialization": "Sorcery",
+      "experience_years": 21,
+      "phone": "555-1212",
+      "license_number": "LIC88888"
     }
   }'
 ```
 
 #### E. Delete Doctor
 * **Route**: `DELETE /api/doctors/<id>/`
-* **Access**: Admins Only
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X DELETE http://127.0.0.1:8000/api/doctors/2/ \
+curl -X DELETE http://127.0.0.1:8000/api/doctors/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
@@ -318,22 +279,22 @@ curl -X DELETE http://127.0.0.1:8000/api/doctors/2/ \
 
 #### A. Assign Patient to Doctor
 * **Route**: `POST /api/mappings/`
-* **Access**: Doctors or Admins
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/mappings/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "patient_id": 4,
-    "doctor_id": 2,
-    "notes": "Assigned to Pediatrics division."
+    "patient_id": 1,
+    "doctor_id": 1,
+    "notes": "Assigned to Neurosurgery division."
   }'
 ```
 
 #### B. List Mappings
 * **Route**: `GET /api/mappings/`
-* **Access**: Doctor (returns only their own mappings) | Admin (returns all mappings)
+* **Access**: Authenticated System Operator (returns only mappings of patients created by the authenticated operator)
 * **cURL Request**:
 ```bash
 curl -X GET http://127.0.0.1:8000/api/mappings/ \
@@ -342,16 +303,16 @@ curl -X GET http://127.0.0.1:8000/api/mappings/ \
 
 #### C. Get Assigned Doctors for Patient
 * **Route**: `GET /api/mappings/<patient_id>/`
-* **Access**: Admin | Assigned Doctor | The Patient themselves
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
-curl -X GET http://127.0.0.1:8000/api/mappings/4/ \
+curl -X GET http://127.0.0.1:8000/api/mappings/1/ \
   -H "Authorization: Bearer <JWT_ACCESS_TOKEN>"
 ```
 
 #### D. Delete Mapping
 * **Route**: `DELETE /api/mappings/<id>/`
-* **Access**: Doctor (must be involved in the mapping) | Admin
+* **Access**: Authenticated System Operator
 * **cURL Request**:
 ```bash
 curl -X DELETE http://127.0.0.1:8000/api/mappings/1/ \
@@ -360,7 +321,7 @@ curl -X DELETE http://127.0.0.1:8000/api/mappings/1/ \
 
 ---
 
-## 5. Error JSON Responses
+## 4. Error JSON Responses
 
 The backend formats all API errors into structured, predictable JSON schemas:
 
@@ -381,13 +342,6 @@ The backend formats all API errors into structured, predictable JSON schemas:
 }
 ```
 
-* **403 Wrong Role / Access Blocked**:
-```json
-{
-  "error": "You do not have permission"
-}
-```
-
 * **404 Not Found**:
 ```json
 {
@@ -401,6 +355,3 @@ The backend formats all API errors into structured, predictable JSON schemas:
   "error": "Internal server error"
 }
 ```
-#   M e d i L i n k  
- #   M e d i L i n k  
- 
