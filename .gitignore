@@ -6,3 +6,4 @@ __pycache__/
 # Files to ignore
 *.sqlite3
 *.py[cod]
+*.exe
