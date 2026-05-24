@@ -1397,7 +1397,7 @@
 
                 <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem;" id="dashboard-bottom-grid">
                     <div class="glass-panel" style="padding: 1.75rem;">
-                        <h3 style="margin-bottom: 1.25rem;">Quick Operations</h3>
+                        <h3 id="quick-actions-title" style="margin-bottom: 1.25rem;">Quick Operations</h3>
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;" id="quick-actions-panel">
                             <!-- Dynamic -->
                         </div>
@@ -2166,12 +2166,20 @@
             const container = document.getElementById('register-fields');
             container.innerHTML = `
                 <div class="form-group">
+                    <label for="reg-role">Account Type</label>
+                    <select id="reg-role" class="form-control" required>
+                        <option value="admin">System Admin</option>
+                        <option value="doctor">Doctor</option>
+                        <option value="patient">Patient</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="reg-name">Full Name</label>
-                    <input type="text" id="reg-name" class="form-control" placeholder="Operator Name" required>
+                    <input type="text" id="reg-name" class="form-control" placeholder="Full Name" required>
                 </div>
                 <div class="form-group">
                     <label for="reg-email">Email Address</label>
-                    <input type="email" id="reg-email" class="form-control" placeholder="operator@healthcare.com" required>
+                    <input type="email" id="reg-email" class="form-control" placeholder="user@healthcare.com" required>
                 </div>
                 <div class="form-group">
                     <label for="reg-password">Password</label>
@@ -2201,6 +2209,7 @@
             const email = document.getElementById('reg-email').value.trim();
             const password = document.getElementById('reg-password').value;
             const confirm = document.getElementById('reg-confirm').value;
+            const role = document.getElementById('reg-role').value;
 
             // Password regex: min 8 chars, 1 number, 1 special char
             const pwRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
@@ -2219,8 +2228,15 @@
             submitBtn.disabled = true;
             submitBtn.innerText = "Registering...";
 
+            let endpoint = `${API_BASE_URL}/auth/register/`;
+            if (role === 'doctor') {
+                endpoint = `${API_BASE_URL}/auth/register/doctor/`;
+            } else if (role === 'patient') {
+                endpoint = `${API_BASE_URL}/auth/register/patient/`;
+            }
+
             try {
-                const response = await fetch(`${API_BASE_URL}/auth/register/`, {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, email, password })
@@ -2320,6 +2336,7 @@
 
             // Render stats based on user role
             if (state.user.role === 'admin') {
+                document.getElementById('quick-actions-title').innerText = "Quick Operations";
                 statsContainer.innerHTML = `
                     <div class="glass-panel stat-card">
                         <div class="stat-icon">👥</div>
@@ -2350,6 +2367,7 @@
                     <button class="btn btn-secondary" onclick="openMappingModal()">Create Assignment</button>
                 `;
             } else if (state.user.role === 'doctor') {
+                document.getElementById('quick-actions-title').innerText = "My Assigned Patients";
                 const doctorMappingsCount = state.mappings.filter(m => m.doctor.id === state.user.id).length;
                 statsContainer.innerHTML = `
                     <div class="glass-panel stat-card">
@@ -2368,15 +2386,60 @@
                     </div>
                 `;
 
-                quickActions.innerHTML = `
-                    <button class="btn btn-secondary" onclick="openPatientModal()">Add Patient Profile</button>
-                    <button class="btn btn-secondary" onclick="openMappingModal()">Assign Patient Relation</button>
-                `;
+                if (state.patients.length === 0) {
+                    quickActions.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 2rem 1rem; color: hsl(var(--text-secondary)); font-size: 0.9rem;">
+                            <p style="margin: 0; font-weight: 500;">No patients assigned to your care list yet.</p>
+                        </div>
+                        <div style="grid-column: 1/-1; display: flex; gap: 1rem; margin-top: 1rem; border-top: 1px solid hsla(var(--border-color)); padding-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="openPatientModal()" style="flex: 1; font-size: 0.85rem; font-weight: 600;">+ Add Patient Profile</button>
+                            <button class="btn btn-secondary" onclick="openMappingModal()" style="flex: 1; font-size: 0.85rem; font-weight: 600;">+ Assign Patient Relation</button>
+                        </div>
+                    `;
+                } else {
+                    const patientsHTML = state.patients.map(p => {
+                        const initials = p.name.substring(0, 2).toUpperCase();
+                        return `
+                            <div style="background: hsla(var(--text-primary), 0.03); border: 1px solid hsla(var(--border-color)); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; position: relative;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <div class="card-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: hsla(var(--color-primary), 0.1); color: hsl(var(--color-primary)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem;">
+                                        ${initials}
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: hsl(var(--text-primary));">${p.name}</h4>
+                                        <p style="margin: 0; font-size: 0.75rem; color: hsl(var(--text-secondary)); font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 140px;">
+                                            ${p.email}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; font-size: 0.8rem; background: hsla(var(--text-primary), 0.02); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid hsla(var(--border-color), 0.5);">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: hsl(var(--text-secondary)); font-weight: 500;">Phone:</span>
+                                        <span style="color: hsl(var(--text-primary)); font-weight: 600;">${p.patient_profile?.phone || 'N/A'}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: hsl(var(--text-secondary)); font-weight: 500;">Blood:</span>
+                                        <span style="color: hsl(var(--text-primary)); font-weight: 600;">${p.patient_profile?.blood_group || 'N/A'}</span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary btn-sm" onclick="viewPatientDetails(${p.id})" style="margin-top: 0.5rem; padding: 0.4rem; font-size: 0.75rem; width: 100%;">
+                                    View Patient File
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+
+                    quickActions.innerHTML = `
+                        ${patientsHTML}
+                        <div style="grid-column: 1/-1; display: flex; gap: 1rem; margin-top: 1rem; border-top: 1px solid hsla(var(--border-color)); padding-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="openPatientModal()" style="flex: 1; font-size: 0.85rem; font-weight: 600;">+ Add Patient Profile</button>
+                            <button class="btn btn-secondary" onclick="openMappingModal()" style="flex: 1; font-size: 0.85rem; font-weight: 600;">+ Assign Patient Relation</button>
+                        </div>
+                    `;
+                }
             } else {
                 // Patient
-                const patientMappingsCount = state.doctors.filter(d => 
-                    state.mappings.some(m => m.doctor.id === d.id && m.patient.id === state.user.id)
-                ).length;
+                document.getElementById('quick-actions-title').innerText = "My Care Team";
                 
                 statsContainer.innerHTML = `
                     <div class="glass-panel stat-card">
@@ -2389,8 +2452,7 @@
                 `;
 
                 quickActions.innerHTML = `
-                    <a href="#/doctors" class="btn btn-secondary">Search Medical Team</a>
-                    <a href="#/profile" class="btn btn-secondary">View Case Profile</a>
+                    <span style="font-size: 0.9rem; color: hsl(var(--text-muted)); grid-column: 1/-1;">Fetching assigned doctors...</span>
                 `;
                 
                 // Fetch assignments specifically for patient
@@ -2419,6 +2481,67 @@
                 if (res && res.ok) {
                     const doctors = await res.json();
                     document.getElementById('patient-assigned-docs-count').innerText = doctors.length;
+
+                    const quickActions = document.getElementById('quick-actions-panel');
+                    if (doctors.length === 0) {
+                        quickActions.innerHTML = `
+                            <div style="grid-column: 1/-1; text-align: center; padding: 2rem 1rem; color: hsl(var(--text-secondary)); font-size: 0.9rem;">
+                                <p style="margin: 0; font-weight: 500;">No doctors assigned to your care team yet.</p>
+                            </div>
+                            <div style="grid-column: 1/-1; display: flex; gap: 1rem; margin-top: 1rem; border-top: 1px solid hsla(var(--border-color)); padding-top: 1rem;">
+                                <a href="#/doctors" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+                                    🔍 Search Medical Team
+                                </a>
+                                <a href="#/profile" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+                                    👤 View Case Profile
+                                </a>
+                            </div>
+                        `;
+                    } else {
+                        const doctorsHTML = doctors.map(doc => {
+                            const initials = doc.name.substring(0, 2).toUpperCase();
+                            return `
+                                <div style="background: hsla(var(--text-primary), 0.03); border: 1px solid hsla(var(--border-color)); border-radius: var(--radius-md); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; position: relative;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div class="card-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: hsla(var(--color-info), 0.1); color: hsl(var(--color-info)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem;">
+                                            ${initials}
+                                        </div>
+                                        <div>
+                                            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: hsl(var(--text-primary));">${doc.name}</h4>
+                                            <p style="margin: 0; font-size: 0.75rem; color: hsl(var(--color-info)); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                ${doc.doctor_profile?.specialization || 'General Practice'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; font-size: 0.8rem; background: hsla(var(--text-primary), 0.02); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid hsla(var(--border-color), 0.5);">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: hsl(var(--text-secondary)); font-weight: 500;">Experience:</span>
+                                            <span style="color: hsl(var(--text-primary)); font-weight: 600;">${doc.doctor_profile?.experience_years ?? 0} Years</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: hsl(var(--text-secondary)); font-weight: 500;">Phone:</span>
+                                            <span style="color: hsl(var(--text-primary)); font-weight: 600;">${doc.doctor_profile?.phone || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-secondary btn-sm" onclick="viewDoctorDetails(${doc.id})" style="margin-top: 0.5rem; padding: 0.4rem; font-size: 0.75rem; width: 100%;">
+                                        View Detailed Profile
+                                    </button>
+                                </div>
+                            `;
+                        }).join('');
+
+                        quickActions.innerHTML = `
+                            ${doctorsHTML}
+                            <div style="grid-column: 1/-1; display: flex; gap: 1rem; margin-top: 1rem; border-top: 1px solid hsla(var(--border-color)); padding-top: 1rem;">
+                                <a href="#/doctors" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+                                    🔍 Search Medical Team
+                                </a>
+                                <a href="#/profile" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+                                    👤 View Case Profile
+                                </a>
+                            </div>
+                        `;
+                    }
                 }
             } catch (err) {
                 console.error(err);

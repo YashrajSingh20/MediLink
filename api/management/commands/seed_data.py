@@ -1,14 +1,14 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from api.models import CustomUser, DoctorProfile, PatientProfile, PatientDoctorMapping
+from api.models import CustomUser, Doctor, Patient, PatientDoctorMapping
 
 
 class Command(BaseCommand):
     """
     Management command to seed the database with mock healthcare data:
     - 1 Admin
-    - 2 Doctors (with DoctorProfiles)
-    - 3 Patients (with PatientProfiles)
+    - 2 Doctors (with CustomUsers and Doctor profiles)
+    - 3 Patients (with CustomUsers and Patient profiles)
     - 3 Patient-Doctor Mappings (assigning each patient to one doctor)
     Wraps entire operation inside transaction.atomic() to ensure clean states.
     Can be run multiple times safely.
@@ -50,8 +50,10 @@ class Command(BaseCommand):
                     name='Dr. Alice Smith',
                     role='doctor'
                 )
-                DoctorProfile.objects.create(
+                doctor1_profile = Doctor.objects.create(
                     user=d1,
+                    name=d1.name,
+                    email=d1.email,
                     specialization='Cardiology',
                     experience_years=12,
                     phone='555-0101',
@@ -65,8 +67,10 @@ class Command(BaseCommand):
                     name='Dr. Bob Jones',
                     role='doctor'
                 )
-                DoctorProfile.objects.create(
+                doctor2_profile = Doctor.objects.create(
                     user=d2,
+                    name=d2.name,
+                    email=d2.email,
                     specialization='Pediatrics',
                     experience_years=8,
                     phone='555-0102',
@@ -81,13 +85,16 @@ class Command(BaseCommand):
                     name='John Doe',
                     role='patient'
                 )
-                PatientProfile.objects.create(
+                patient1_profile = Patient.objects.create(
                     user=p1,
+                    name=p1.name,
+                    email=p1.email,
                     date_of_birth='1990-05-15',
                     blood_group='O+',
                     phone='555-0201',
                     address='123 Main St, New York',
-                    medical_history='No major chronic medical conditions. Minor flu in Jan 2026.'
+                    medical_history='No major chronic medical conditions. Minor flu in Jan 2026.',
+                    created_by=admin_user
                 )
                 self.stdout.write(self.style.SUCCESS(f'Created Patient: {p1.name} ({p1.email})'))
 
@@ -97,13 +104,16 @@ class Command(BaseCommand):
                     name='Jane Miller',
                     role='patient'
                 )
-                PatientProfile.objects.create(
+                patient2_profile = Patient.objects.create(
                     user=p2,
+                    name=p2.name,
+                    email=p2.email,
                     date_of_birth='1985-11-20',
                     blood_group='A-',
                     phone='555-0202',
                     address='456 Elm St, Los Angeles',
-                    medical_history='Asthma patient since childhood. Takes inhaler daily.'
+                    medical_history='Asthma patient since childhood. Takes inhaler daily.',
+                    created_by=admin_user
                 )
                 self.stdout.write(self.style.SUCCESS(f'Created Patient: {p2.name} ({p2.email})'))
 
@@ -113,34 +123,37 @@ class Command(BaseCommand):
                     name='Charlie Brown',
                     role='patient'
                 )
-                PatientProfile.objects.create(
+                patient3_profile = Patient.objects.create(
                     user=p3,
+                    name=p3.name,
+                    email=p3.email,
                     date_of_birth='1995-02-10',
                     blood_group='B+',
                     phone='555-0203',
                     address='789 Oak St, Chicago',
-                    medical_history='Mild Hypertension. Advised low sodium diet.'
+                    medical_history='Mild Hypertension. Advised low sodium diet.',
+                    created_by=admin_user
                 )
                 self.stdout.write(self.style.SUCCESS(f'Created Patient: {p3.name} ({p3.email})'))
 
                 # 4. Create Mappings
                 m1 = PatientDoctorMapping.objects.create(
-                    patient=p1,
-                    doctor=d1,
+                    patient=patient1_profile,
+                    doctor=doctor1_profile,
                     notes='Patient scheduled for monthly cardiac assessment.'
                 )
                 self.stdout.write(self.style.SUCCESS(f'Assigned Patient {p1.name} -> Doctor {d1.name}'))
 
                 m2 = PatientDoctorMapping.objects.create(
-                    patient=p2,
-                    doctor=d2,
+                    patient=patient2_profile,
+                    doctor=doctor2_profile,
                     notes='Consultation for seasonal asthma flareups.'
                 )
                 self.stdout.write(self.style.SUCCESS(f'Assigned Patient {p2.name} -> Doctor {d2.name}'))
 
                 m3 = PatientDoctorMapping.objects.create(
-                    patient=p3,
-                    doctor=d1,
+                    patient=patient3_profile,
+                    doctor=doctor1_profile,
                     notes='Hypertension consultation. Checking blood pressure daily.'
                 )
                 self.stdout.write(self.style.SUCCESS(f'Assigned Patient {p3.name} -> Doctor {d1.name}'))

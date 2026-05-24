@@ -441,7 +441,7 @@ async function loadPatients() {
     if (res.ok) {
       const data = await res.json();
       const list = document.getElementById('patientsList');
-      list.innerHTML = data.results.map(p => `
+      list.innerHTML = (data.results || data).map(p => `
         <div class="list-item">
           <div class="list-item-info">
             <h4>${p.name}</h4>
@@ -469,7 +469,7 @@ async function loadDoctors() {
     if (res.ok) {
       const data = await res.json();
       const list = document.getElementById('doctorsList');
-      list.innerHTML = data.results.map(d => `
+      list.innerHTML = (data.results || data).map(d => `
         <div class="list-item">
           <div class="list-item-info">
             <h4>Dr. ${d.name}</h4>
@@ -494,7 +494,7 @@ async function loadMappings() {
     if (res.ok) {
       const data = await res.json();
       const list = document.getElementById('mappingsList');
-      list.innerHTML = data.results.map(m => `
+      list.innerHTML = (data.results || data).map(m => `
         <div class="list-item">
           <div class="list-item-info">
             <h4>${m.patient.name} → Dr. ${m.doctor.name}</h4>
@@ -518,15 +518,17 @@ async function loadMyDoctors() {
     if (res.ok) {
       const data = await res.json();
       const list = document.getElementById('myDoctorsList');
-      list.innerHTML = data.map(d => `
+      list.innerHTML = data.map(d => {
+        const doc = d.doctor || d; // safe fallback for both flat doctor and mapping responses
+        return `
         <div class="list-item">
           <div class="list-item-info">
-            <h4>Dr. ${d.doctor.name}</h4>
-            <p>${d.doctor.doctor_profile?.specialization || 'N/A'}</p>
-            <p>Lic: ${d.doctor.doctor_profile?.license_number || 'N/A'}</p>
+            <h4>Dr. ${doc.name}</h4>
+            <p>${doc.doctor_profile?.specialization || 'N/A'}</p>
+            <p>Lic: ${doc.doctor_profile?.license_number || 'N/A'}</p>
           </div>
         </div>
-      `).join('');
+      `; }).join('');
     }
   } catch (err) {
     console.error(err);

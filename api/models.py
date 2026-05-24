@@ -36,7 +36,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     Custom User Model representing the Administrator / receptionist / operator.
     Uses email as the unique identifier for logins.
     """
+    ROLE_CHOICES = (
+        ('admin', 'Admin/Operator'),
+        ('doctor', 'Doctor'),
+        ('patient', 'Patient'),
+    )
     email = models.EmailField(unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
     name = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -58,8 +64,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 class Doctor(models.Model):
     """
     Doctor Model representing doctor data entries managed by the system operators.
-    Standalone model, does not login.
+    Can be associated with a CustomUser for logins.
     """
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True, related_name='doctor_profile')
     name = models.CharField(max_length=255)
     email = models.EmailField(max_length=255, blank=True, default='')
     specialization = models.CharField(max_length=100)
@@ -78,9 +85,11 @@ class Doctor(models.Model):
 class Patient(models.Model):
     """
     Patient Model representing patient data entries managed by the system operators.
+    Can be associated with a CustomUser for logins.
     Contains date_of_birth, blood_group, phone, address, and medical_history.
     Tracked back to the CustomUser (operator) who created it.
     """
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True, related_name='patient_profile')
     name = models.CharField(max_length=255)
     email = models.EmailField(max_length=255, blank=True, default='')
     date_of_birth = models.DateField()

@@ -60,7 +60,7 @@ class LoginSerializer(serializers.Serializer):
             'user_id': user.id,
             'name': user.name,
             'email': user.email,
-            'role': 'admin'  # Hardcode role to admin so frontend grants full dashboard access to operator
+            'role': user.role  # Dynamically return the user's role
         }
 
 
@@ -86,6 +86,9 @@ class DoctorSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        # Override id with associated CustomUser.id if present
+        if instance.user:
+            ret['id'] = instance.user.id
         # Wrap profile fields under doctor_profile
         ret['doctor_profile'] = {
             'specialization': ret.pop('specialization', 'General Practice'),
@@ -108,6 +111,38 @@ class DoctorSerializer(serializers.ModelSerializer):
         
         return super().to_internal_value(internal_data)
 
+    def create(self, validated_data):
+        password = self.initial_data.get('password')
+        email = validated_data.get('email')
+        name = validated_data.get('name')
+        
+        # Create associated CustomUser
+        user = CustomUser.objects.create_user(
+            email=email,
+            name=name,
+            password=password,
+            role='doctor'
+        )
+        
+        # Create Doctor profile linked to user
+        doctor = Doctor.objects.create(user=user, **validated_data)
+        return doctor
+
+    def update(self, instance, validated_data):
+        email = validated_data.get('email', instance.email)
+        name = validated_data.get('name', instance.name)
+        
+        if instance.user:
+            user = instance.user
+            user.email = email
+            user.name = name
+            password = self.initial_data.get('password')
+            if password:
+                user.set_password(password)
+            user.save()
+            
+        return super().update(instance, validated_data)
+
 
 class PatientSerializer(serializers.ModelSerializer):
     """
@@ -126,6 +161,9 @@ class PatientSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        # Override id with associated CustomUser.id if present
+        if instance.user:
+            ret['id'] = instance.user.id
         # Wrap profile fields under patient_profile
         ret['patient_profile'] = {
             'date_of_birth': ret.pop('date_of_birth', '2000-01-01'),
@@ -149,6 +187,38 @@ class PatientSerializer(serializers.ModelSerializer):
         
         return super().to_internal_value(internal_data)
 
+    def create(self, validated_data):
+        password = self.initial_data.get('password')
+        email = validated_data.get('email')
+        name = validated_data.get('name')
+        
+        # Create associated CustomUser
+        user = CustomUser.objects.create_user(
+            email=email,
+            name=name,
+            password=password,
+            role='patient'
+        )
+        
+        # Create Patient profile linked to user
+        patient = Patient.objects.create(user=user, **validated_data)
+        return patient
+
+    def update(self, instance, validated_data):
+        email = validated_data.get('email', instance.email)
+        name = validated_data.get('name', instance.name)
+        
+        if instance.user:
+            user = instance.user
+            user.email = email
+            user.name = name
+            password = self.initial_data.get('password')
+            if password:
+                user.set_password(password)
+            user.save()
+            
+        return super().update(instance, validated_data)
+
 
 class MappingSerializer(serializers.ModelSerializer):
     """
@@ -156,16 +226,8 @@ class MappingSerializer(serializers.ModelSerializer):
     - Input: Writes accept patient_id and doctor_id.
     - Output: Returns nested Patient and Doctor details.
     """
-    patient_id = serializers.PrimaryKeyRelatedField(
-        queryset=Patient.objects.all(),
-        source='patient',
-        write_only=True
-    )
-    doctor_id = serializers.PrimaryKeyRelatedField(
-        queryset=Doctor.objects.all(),
-        source='doctor',
-        write_only=True
-    )
+    patient_id = serializers.IntegerField(write_only=True)
+    doctor_id = serializers.IntegerField(write_only=True)
     patient = PatientSerializer(read_only=True)
     doctor = DoctorSerializer(read_only=True)
 
@@ -174,9 +236,29 @@ class MappingSerializer(serializers.ModelSerializer):
         fields = ['id', 'patient_id', 'doctor_id', 'patient', 'doctor', 'assigned_at', 'notes']
         read_only_fields = ['id', 'assigned_at']
 
+    def validate_patient_id(self, value):
+        # Resolve CustomUser.id to Patient profile
+        patient = Patient.objects.filter(user_id=value).first()
+        if not patient:
+            # Fallback to database primary key
+            patient = Patient.objects.filter(id=value).first()
+        if not patient:
+            raise serializers.ValidationError("Patient profile does not exist.")
+        return patient
+
+    def validate_doctor_id(self, value):
+        # Resolve CustomUser.id to Doctor profile
+        doctor = Doctor.objects.filter(user_id=value).first()
+        if not doctor:
+            # Fallback to database primary key
+            doctor = Doctor.objects.filter(id=value).first()
+        if not doctor:
+            raise serializers.ValidationError("Doctor profile does not exist.")
+        return doctor
+
     def validate(self, data):
-        patient = data.get('patient')
-        doctor = data.get('doctor')
+        patient = data.get('patient_id')
+        doctor = data.get('doctor_id')
         
         # Check if already assigned
         instance = self.instance
@@ -187,3 +269,8 @@ class MappingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This patient-doctor assignment already exists.")
         
         return data
+
+    def create(self, validated_data):
+        patient = validated_data.pop('patient_id')
+        doctor = validated_data.pop('doctor_id')
+        return PatientDoctorMapping.objects.create(patient=patient, doctor=doctor, **validated_data)

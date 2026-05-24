@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 
 from api.views import (
     UserRegisterView,
+    DoctorRegisterView,
+    PatientRegisterView,
     LoginView,
     PatientListCreateView,
     PatientDetailView,
@@ -36,8 +38,8 @@ class MappingDetailDispatchView(APIView):
 urlpatterns = [
     # Auth Endpoints
     path('auth/register/', UserRegisterView.as_view(), name='register'),
-    path('auth/register/doctor/', UserRegisterView.as_view(), name='register_doctor_compat'),
-    path('auth/register/patient/', UserRegisterView.as_view(), name='register_patient_compat'),
+    path('auth/register/doctor/', DoctorRegisterView.as_view(), name='register_doctor'),
+    path('auth/register/patient/', PatientRegisterView.as_view(), name='register_patient'),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
